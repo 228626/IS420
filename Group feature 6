@@ -1,0 +1,96 @@
+-- Feature 6: Start a session
+CREATE OR REPLACE PROCEDURE start_parking_session 
+(
+  p_customer_id NUMBER,
+  p_vehicle_id NUMBER,
+  p_zone_id NUMBER,
+  p_start_time TIMESTAMP,
+  p_hours_to_park NUMBER
+)
+AS
+  v_available_spots NUMBER;
+  v_max_parking_length NUMBER;
+  v_hourly_rate NUMBER;
+  v_total_charge NUMBER;
+BEGIN
+  -- Check if the customer ID, vehicle ID, and zone ID are valid
+  SELECT COUNT(*) INTO v_available_spots 
+  FROM parking_zone 
+  WHERE zone_id = p_zone_id AND available_spots > 0;
+
+  IF v_available_spots = 0 THEN
+    DBMS_OUTPUT.PUT_LINE('No available spots in the selected zone');
+    RETURN;
+  END IF;
+
+  -- Get zone details
+  SELECT hourly_rate, max_len INTO v_hourly_rate, v_max_parking_length
+  FROM parking_zone WHERE zone_id = p_zone_id;
+
+  -- Check if the session start time is within the effective period
+  IF NOT (
+    TO_CHAR(p_start_time, 'D') BETWEEN start_day AND end_day
+    AND p_start_time - TRUNC(p_start_time) BETWEEN start_time AND end_time
+  ) THEN
+    DBMS_OUTPUT.PUT_LINE('Parking is not allowed at this time');
+    RETURN;
+  END IF;
+
+  -- Check if the requested parking length exceeds the maximal parking length
+  IF p_hours_to_park > v_max_parking_length THEN
+    DBMS_OUTPUT.PUT_LINE('Requested parking length exceeds the maximal parking length');
+    RETURN;
+  END IF;
+
+  -- Calculate total charge
+  v_total_charge := 1.00 + (v_hourly_rate * p_hours_to_park);
+
+  -- Insert a new parking session
+  INSERT INTO parking_session (
+    session_id,
+    customer_id,
+    vehicle_id,
+    zone_id,
+    start_time,
+    end_time,
+    total_charge
+  ) VALUES (
+    parking_session_seq.NEXTVAL,
+    p_customer_id,
+    p_vehicle_id,
+    p_zone_id,
+    p_start_time,
+    p_start_time + NUMTODSINTERVAL(p_hours_to_park, 'hour'),
+    v_total_charge
+  );
+
+  -- Insert a message about the new parking session
+  INSERT INTO message (message_id, customer_id, message_time, message_body)
+  VALUES (
+    message_seq.NEXTVAL,
+    p_customer_id,
+    p_start_time,
+    'A new parking session with ID ' || parking_session_seq.CURRVAL || ' created'
+  );
+
+  -- Update available spots for the parking zone
+  UPDATE parking_zone SET available_spots = available_spots - 1 WHERE zone_id = p_zone_id;
+
+  -- Insert the initial payment transaction
+  INSERT INTO payment (
+    payment_id,
+    session_id,
+    payment_time,
+    payment_amount,
+    hours_covered
+  ) VALUES (
+    payment_seq.NEXTVAL,
+    parking_session_seq.CURRVAL,
+    p_start_time,
+    v_total_charge,
+    p_hours_to_park
+  );
+
+  DBMS_OUTPUT.PUT_LINE('Parking session started successfully. Total charge: $' || v_total_charge);
+END start_parking_session;
+/
