@@ -1,0 +1,73 @@
+-- Member 2: Feature 2 - Add a vehicle
+CREATE TABLE VEHICLE_ID (
+  license_plate VARCHAR2(10),
+  state VARCHAR2(2),
+  customer_id NUMBER,
+  maker VARCHAR2(20),
+  model VARCHAR2(20), 
+  year NUMBER,
+  color VARCHAR2(10)
+);
+
+INSERT INTO VEHICLE_ID VALUES ('XYZ987','NY',1002, 'Ford', 'F-150',2022,'Blue');
+INSERT INTO VEHICLE_ID  VALUES ('LVN123','NV',1003,'Tesla','Model 3' ,2021, 'BLACK');
+INSERT INTO VEHICLE_ID VALUES ( 'ABC123', 'CA', 1001,'Toyota','Camry',2020, 'Red');
+INSERT INTO VEHICLE_ID VALUES('XYZ987', 'NY', 1002, 'Ford', 'F-150', 2022, 'Blue');
+
+SET SERVEROUTPUT ON
+
+
+CREATE SEQUENCE add_vehicles_seq START WITH 1000;
+
+CREATE OR REPLACE PROCEDURE add_vehicle 
+(
+  p_license_plate VARCHAR2,
+  p_state VARCHAR2,
+  p_customer_id NUMBER,
+  p_maker VARCHAR2,
+  p_model VARCHAR2, 
+  p_year NUMBER,
+  p_color VARCHAR2
+)
+AS
+  v_count NUMBER;
+BEGIN
+  -- Check if the customer ID exists
+  SELECT COUNT(*) INTO v_count FROM customer WHERE customer_id = p_customer_id;
+
+  IF v_count = 0 THEN
+    DBMS_OUTPUT.PUT_LINE('Invalid customer ID');
+    RETURN;
+  END IF;
+
+  -- Check if the vehicle with the same plate number and state exists
+  SELECT COUNT(*) INTO v_count FROM add_vehicles
+  WHERE license_plate = p_license_plate AND state = p_state;
+
+  IF v_count > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('Vehicle already exists');
+    RETURN;
+  END IF;
+
+  -- Insert a new vehicle using the sequence for vehicle_id
+  INSERT INTO add_vehicles (
+    license_plate,
+    state,
+    customer_id,
+    maker,
+    model,
+    year,
+    color
+  ) VALUES (
+    p_license_plate,
+    p_state,
+    p_customer_id,
+    p_maker,
+    p_model,
+    p_year,
+    p_color
+  );
+
+  DBMS_OUTPUT.PUT_LINE('New Vehicle ID: ' || add_vehicles_seq.CURRVAL);
+END add_vehicle;
+/
